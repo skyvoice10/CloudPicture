@@ -1,0 +1,392 @@
+// 专线延伸流量压制[112039510001]校验规则
+// 产品: 专线延伸省网流量压制服务[122039510001]，专线延伸骨干流量压制服务[122039510002]
+
+
+var businessParamsMap = window.groupProduct.initParamsMap;
+var prefix = "#groupProduct_attr_";
+
+// 策划ID
+var OFFER_ID = businessParamsMap.get("OFFER_ID");
+
+// 属性ID
+var ATTR_IP_BELONG = "152039510001";       // IP地址归属
+var ATTR_TRAFFIC_SUPPRESSION="152039510004"; //流量压制任务调用方式
+var ATTR_MAX_CONCURRENCY="152039510011";  //最大并发规格
+var ATTR_CONCURRENCY_FACTOR="152039510012" //并发系数
+var ATTR_MAX_BLOCK_TIME="152039510013"; //  最长封堵时间
+var ATTR_DURATION_FACTOR="152039510014";  //时长系数
+var ATTR_CATALOG_PRICE="152039510015";  //积分总金额目录价
+var ATTR_DISCOUNT="152039510016";       //折扣
+var ATTR_PURCHASE_POINTS="152039510017"; //购买积分数
+var ATTR_POINT_UNIT_PRICE="152039510018"//积分单价
+var ATTR_TOTAL_POINTS_AMOUNT="152039510019";//积分总金额
+var ATTR_BILLING_EFFECTIVE_DATE="152039510020";//计费及生效日期
+var ATTR_POINTS_EXPIRATION_DATE="152039510021";//积分失效日期
+// 枚举
+//  ip归属枚举
+const IpOwnership = Object.freeze({
+    CHINA_MOBILE: "中国移动",
+    OTHER: "其他"
+});
+// 流量压制任务调用方式枚举
+const TrafficSuppressionCallType = Object.freeze({
+    API: "API",
+    WEB: "Web",
+    OTHER: "其他"
+});
+//  最长封堵时间枚举
+const MaxBlockTime = Object.freeze({
+    ONE_DAY: "1天",
+    SEVEN_DAYS: "7天",
+    THIRTY_DAYS: "30天"
+});
+
+//  正则
+const MAX_CONCURRENCY_REGEX = /^(10|[1-9])$/;  //最大并发规格正则（数字整数1~10)
+const POSITIVE_INTEGER_REGEX = /^[1-9]\d*$/;   //数字正整数正则
+
+/**
+ * 专线延伸流量压制校验规则类
+ */
+rule_112039510001 = function () {
+    rule_112039510001.prototype.ruleInit = ruleInit;
+    rule_112039510001.prototype.ruleCheck = ruleCheck;
+    rule_112039510001.prototype.ruleSubmit = ruleSubmit;
+}
+
+/**
+ * 初始化方法
+ */
+function ruleInit() {
+    return true;
+}
+
+/**
+ * 字段校验方法
+ * @param col 列ID (格式: 产品_ID_属性_ID)
+ * @param colName 列名称
+ * @param newValue 新值
+ * @param oldValue 旧值
+ * @returns {boolean}
+ */
+function ruleCheck(col, colName, newValue, oldValue) {
+    //  IP地址归属校验
+    if (col.indexOf("_" + ATTR_IP_BELONG) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!Object.values(IpOwnership).includes(newValue)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "IP地址归属只能为：中国移动 或 其他");
+                return false;
+            }
+        }
+    }
+    //  流量压制任务调用方式校验
+    if (col.indexOf("_" + ATTR_TRAFFIC_SUPPRESSION) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!Object.values(TrafficSuppressionCallType).includes(newValue)) {
+                    setColVal(col, "");
+                    MessageBox.alert("提示", "流量压制任务调用方式只能为：API、Web、其他");
+                    return false;
+            }
+        }
+    }
+    //  最大并发规格校验
+    if (col.indexOf("_" + ATTR_MAX_CONCURRENCY) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!MAX_CONCURRENCY_REGEX.test(newValue)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "最大并发规格只能填写 1~10 的整数");
+                return false;
+            }
+        }
+    }
+    //  最长封堵时间校验
+    if (col.indexOf("_" + ATTR_MAX_BLOCK_TIME) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!Object.values(MaxBlockTime).includes(newValue)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "最长封堵时间只能为：1天、7天、30天");
+                return false;
+            }
+        }
+    }
+    //  购买积分数校验
+    if (col.indexOf("_" + ATTR_PURCHASE_POINTS) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!POSITIVE_INTEGER_REGEX.test(newValue)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "购买积分数为正整数");
+                return false;
+            }
+        }
+    }
+    //  积分单价校验
+    if (col.indexOf("_" + ATTR_POINT_UNIT_PRICE) >= 0) {
+        if (newValue != null && newValue !== "") {
+            if (!POSITIVE_INTEGER_REGEX.test(newValue)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "积分单价为正整数");
+                return false;
+            }
+        }
+    }
+    //  设置并发系数
+    if ((col.indexOf("_" + ATTR_MAX_CONCURRENCY) >= 0)) {
+        getConcurrencyFactor(col);
+    }
+    //  设置时长系数
+    if ((col.indexOf("_" + ATTR_MAX_CONCURRENCY) >= 0)) {
+        getConcurrencyFactor(col);
+    }
+    //  设置积分总金额目录价
+    if ((col.indexOf("_" + ATTR_PURCHASE_POINTS) >= 0)) {
+        calculateTotalPointsAmount(col);
+    }
+    //  设置折扣
+    if ((col.indexOf("_" + ATTR_POINT_UNIT_PRICE) >= 0)) {
+        calculateDiscount(col);
+    }
+    //  设置积分总金额(积分单价*购买积分数)
+    if ((col.indexOf("_" + ATTR_POINT_UNIT_PRICE) >= 0)||(col.indexOf("_" + ATTR_PURCHASE_POINTS) >= 0) ) {
+        calculateTotalPointsAmount(col);
+    }
+    //  校验计费生效日期
+    if ((col.indexOf("_" + ATTR_BILLING_EFFECTIVE_DATE) >= 0)) {
+        if (newValue != null && newValue !== "") {
+            //  得到当前时间
+                var nowDate=new Date(newValue) ;
+                var endDate = new Date();
+                endDate.setMonth(endDate.getMonth() + 2, 0);
+                endDate.setHours(23, 59, 59, 999);
+                if(nowDate>endDate){
+                    setColVal(col, "");
+                    MessageBox.alert("提示", "只支持选择当日至次月最后1日");
+                    return false;
+                }
+
+        }
+    }
+    //  设置积分失效日期
+    if ((col.indexOf("_" + ATTR_BILLING_EFFECTIVE_DATE) >= 0)) {
+        getPointsExpirationDate(col);
+    }
+    return true;
+}
+
+// var ATTR_MAX_BLOCK_TIME="152039510013"; //  最长封堵时间
+// var ATTR_DURATION_FACTOR="152039510014";  //时长系数
+function getDurationFactor(col){
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var maxBlockTimeCol = prodId + "_" + ATTR_MAX_BLOCK_TIME;
+    var DurationFactorCol = prodId + "_" + ATTR_DURATION_FACTOR;
+    var maxBlockTimeVal = getColVal(maxBlockTimeCol);
+
+    if (maxBlockTimeVal != null && maxBlockTimeVal !== "") {
+        var currencyFactor=0;
+        switch (maxBlockTimeVal) {
+            case "1天":
+                currencyFactor=1;
+                break;
+            case "7天":
+                currencyFactor=2;
+                break;
+            case "30天":
+                currencyFactor=3;
+                break;
+        }
+        setColVal("groupProduct_attr_"+DurationFactorCol, currencyFactor);
+    }
+}
+
+/**
+ * 得到并发系数
+ * @param col
+ */
+//var ATTR_CONCURRENCY_FACTOR="152039510012" //并发系数
+// var ATTR_MAX_CONCURRENCY="152039510011";  //最大并发规格
+function getConcurrencyFactor(col){
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var maxCurrencyCol = prodId + "_" + ATTR_MAX_CONCURRENCY;
+    var currencyFactorCol = prodId + "_" + ATTR_CONCURRENCY_FACTOR;
+    var maxCurrencyVal = getColVal(maxCurrencyCol);
+
+    if (maxCurrencyVal != null && maxCurrencyVal !== "") {
+        var maxCurrency = parseInt(maxCurrencyVal, 10);
+        if (!isNaN(maxCurrency)) {
+            var currencyFactor=1+(maxCurrency-1)*0.5;
+            setColVal("groupProduct_attr_"+currencyFactorCol, currencyFactor);
+        }
+    }
+}
+
+/**
+ * 计算积分总金额目录价
+ * @param col
+ */
+// var ATTR_CATALOG_PRICE="152039510015";  //积分总金额目录价
+// var ATTR_PURCHASE_POINTS="152039510017"; //购买积分数
+function calculateTotalPointsAmount(col) {
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var purchasePointsCol = prodId + "_" + ATTR_PURCHASE_POINTS;
+    var catalogPriceCol = prodId + "_" + ATTR_CATALOG_PRICE;
+    var purchasePointsVal = getColVal(purchasePointsCol);
+
+    if (purchasePointsVal != null && purchasePointsVal !== "") {
+        var purchasePoints = parseInt(purchasePointsVal, 10);
+        if (!isNaN(purchasePoints)) {
+            var total=purchasePoints * 300;
+            setColVal("groupProduct_attr_"+catalogPriceCol, total);
+        }
+    }
+}
+
+/**
+ * 计算折扣(小数点保留1位)
+ * @param col
+ */
+// var ATTR_DISCOUNT="152039510016";       //折扣
+// var ATTR_POINT_UNIT_PRICE="152039510018"//积分单价
+function calculateDiscount(col) {
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var pointUnitPriceCol = prodId + "_" + ATTR_POINT_UNIT_PRICE;
+    var discountCol = prodId + "_" + ATTR_DISCOUNT;
+    var pointUnitPriceVal = getColVal(pointUnitPriceCol);
+
+    if (pointUnitPriceVal != null && pointUnitPriceVal !== "") {
+        var pointUnitPrice = parseInt(pointUnitPriceVal, 10);
+        if (!isNaN(pointUnitPrice)) {
+            var discount=pointUnitPrice / 300;
+            setColVal("groupProduct_attr_"+discountCol, discount.toFixed(1));
+        }
+    }
+}
+
+/**
+ * 计算积分总金额
+ * @param col 当前列ID
+ */
+// var ATTR_PURCHASE_POINTS="152039510017"; //购买积分数
+// var ATTR_POINT_UNIT_PRICE="152039510018"//积分单价
+// var ATTR_TOTAL_POINTS_AMOUNT="152039510019";//积分总金额
+function calculateTotalPointsAmount(col) {
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+
+    var purchasePointsCol = prodId + "_" + ATTR_PURCHASE_POINTS;
+    var pointUnitPriceCol = prodId + "_" + ATTR_POINT_UNIT_PRICE;
+    var totalPointsAmountCol=prodId+"_"+ATTR_TOTAL_POINTS_AMOUNT;
+    var purchasePointsVal = getColVal(purchasePointsCol);
+    var pointUnitPriceVal = getColVal(pointUnitPriceCol);
+
+    if (purchasePointsVal != null && purchasePointsVal !== ""
+        && pointUnitPriceVal != null && pointUnitPriceVal !== "") {
+
+        var purchasePoints = parseInt(purchasePointsVal, 10);
+        var pointUnitPrice = parseInt(pointUnitPriceVal, 10);
+
+        if (!isNaN(purchasePoints) && !isNaN(pointUnitPrice)) {
+            var totalPointsAmount=purchasePoints * pointUnitPrice;
+            setColVal(totalPointsAmountCol,totalPointsAmount);
+        }
+    }
+}
+
+// var ATTR_BILLING_EFFECTIVE_DATE="152039510020";//计费及生效日期
+// var ATTR_POINTS_EXPIRATION_DATE="152039510021";//积分失效日期
+/**
+ * 得到积分失效日期
+ * @param col
+ */
+function getPointsExpirationDate(col){
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var pointsExpirationDateCol = prodId + "_" + ATTR_POINTS_EXPIRATION_DATE;
+    var billingEffectiveDateCol = prodId + "_" + ATTR_BILLING_EFFECTIVE_DATE;
+    var billingEffectiveDateVal = getColVal(billingEffectiveDateCol);
+    if (billingEffectiveDateVal != null && billingEffectiveDateVal !== "") {
+        var billingEffectiveDate=new Date(dateStr);
+        //  增加一年
+        billingEffectiveDate.setFullYear(date.getFullYear() + 1);
+        setColVal(pointsExpirationDateCol,billingEffectiveDateVal);
+    }
+}
+
+
+
+/**
+ * 提交校验方法
+ * @returns {boolean}
+ */
+function ruleSubmit() {
+    var priceVal = getColVal(PROD_122088710001 + "_" + ATTR_PRICE);
+    var usageVal = getColVal(PROD_122088710001 + "_" + ATTR_USAGE);
+
+    // 校验单价必填
+    if (priceVal == null || priceVal === "") {
+        MessageBox.alert("提示", "请输入单价！");
+        return false;
+    }
+
+    // 校验使用量必填
+    if (usageVal == null || usageVal === "") {
+        MessageBox.alert("提示", "请输入使用量！");
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * 获取规则对象
+ */
+function getFuncObj() {
+    var ruleObj = businessParamsMap.get("rule_112088710001");
+    if (!ruleObj) {
+        ruleObj = new rule_112088710001();
+        businessParamsMap.put("rule_112088710001", ruleObj);
+    }
+    return ruleObj;
+}
+
+/**
+ * 规则数据初始化方法
+ */
+function RuleInit() {
+    return getFuncObj().ruleInit();
+}
+
+/**
+ * 规则校验方法
+ */
+function RuleCheck(col, colName, newValue, oldValue) {
+    return getFuncObj().ruleCheck(col, colName, newValue, oldValue);
+}
+
+/**
+ * 规则提交校验方法
+ */
+function RuleSubmit() {
+    return getFuncObj().ruleSubmit();
+}
+
+/**
+ * 设置列值
+ * @param col 列ID
+ * @param val 值
+ */
+function setColVal(col, val) {
+    $("#" + col).val(val);
+}
+
+/**
+ * 获取列值
+ * @param col 列ID
+ * @returns {*}
+ */
+function getColVal(col) {
+    return $(prefix + col).val();
+}
