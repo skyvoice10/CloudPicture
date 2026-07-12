@@ -24,18 +24,18 @@ var ATTR_BILLING_EFFECTIVE_DATE="152039510020";//计费及生效日期
 var ATTR_POINTS_EXPIRATION_DATE="152039510021";//积分失效日期
 // 枚举
 //  ip归属枚举
-const IpOwnership = Object.freeze({
+const IpBelongEnum = Object.freeze({
     CHINA_MOBILE: "中国移动",
     OTHER: "其他"
 });
 // 流量压制任务调用方式枚举
-const TrafficSuppressionCallType = Object.freeze({
+const TrafficSuppressionEnum = Object.freeze({
     API: "API",
     WEB: "Web",
     OTHER: "其他"
 });
 //  最长封堵时间枚举
-const MaxBlockTime = Object.freeze({
+const MaxBlockTimeEnum = Object.freeze({
     ONE_DAY: "1天",
     SEVEN_DAYS: "7天",
     THIRTY_DAYS: "30天"
@@ -73,7 +73,7 @@ function ruleCheck(col, colName, newValue, oldValue) {
     //  IP地址归属校验
     if (col.indexOf("_" + ATTR_IP_BELONG) >= 0) {
         if (newValue != null && newValue !== "") {
-            if (!Object.values(IpOwnership).includes(newValue)) {
+            if (!checkEnum(newValue,IpBelongEnum)) {
                 setColVal(col, "");
                 MessageBox.alert("提示", "IP地址归属只能为：中国移动 或 其他");
                 return false;
@@ -83,10 +83,10 @@ function ruleCheck(col, colName, newValue, oldValue) {
     //  流量压制任务调用方式校验
     if (col.indexOf("_" + ATTR_TRAFFIC_SUPPRESSION) >= 0) {
         if (newValue != null && newValue !== "") {
-            if (!Object.values(TrafficSuppressionCallType).includes(newValue)) {
-                    setColVal(col, "");
-                    MessageBox.alert("提示", "流量压制任务调用方式只能为：API、Web、其他");
-                    return false;
+            if (!checkEnum(newValue,TrafficSuppressionEnum)) {
+                setColVal(col, "");
+                MessageBox.alert("提示", "流量压制任务调用方式只能为：API、Web、其他");
+                return false;
             }
         }
     }
@@ -103,7 +103,7 @@ function ruleCheck(col, colName, newValue, oldValue) {
     //  最长封堵时间校验
     if (col.indexOf("_" + ATTR_MAX_BLOCK_TIME) >= 0) {
         if (newValue != null && newValue !== "") {
-            if (!Object.values(MaxBlockTime).includes(newValue)) {
+            if (!checkEnum(newValue,MaxBlockTimeEnum)) {
                 setColVal(col, "");
                 MessageBox.alert("提示", "最长封堵时间只能为：1天、7天、30天");
                 return false;
@@ -135,12 +135,12 @@ function ruleCheck(col, colName, newValue, oldValue) {
         getConcurrencyFactor(col);
     }
     //  设置时长系数
-    if ((col.indexOf("_" + ATTR_MAX_CONCURRENCY) >= 0)) {
-        getConcurrencyFactor(col);
+    if ((col.indexOf("_" + ATTR_MAX_BLOCK_TIME) >= 0)) {
+        getDurationFactor(col);
     }
     //  设置积分总金额目录价
     if ((col.indexOf("_" + ATTR_PURCHASE_POINTS) >= 0)) {
-        calculateTotalPointsAmount(col);
+        calculateCatalogPrice(col);
     }
     //  设置折扣
     if ((col.indexOf("_" + ATTR_POINT_UNIT_PRICE) >= 0)) {
@@ -154,16 +154,15 @@ function ruleCheck(col, colName, newValue, oldValue) {
     if ((col.indexOf("_" + ATTR_BILLING_EFFECTIVE_DATE) >= 0)) {
         if (newValue != null && newValue !== "") {
             //  得到当前时间
-                var nowDate=new Date(newValue) ;
-                var endDate = new Date();
-                endDate.setMonth(endDate.getMonth() + 2, 0);
-                endDate.setHours(23, 59, 59, 999);
-                if(nowDate>endDate){
-                    setColVal(col, "");
-                    MessageBox.alert("提示", "只支持选择当日至次月最后1日");
-                    return false;
-                }
-
+            var nowDate=new Date(newValue) ;
+            var endDate = new Date();
+            endDate.setMonth(endDate.getMonth() + 2, 0);
+            endDate.setHours(23, 59, 59, 999);
+            if(nowDate>endDate){
+                setColVal(col, "");
+                MessageBox.alert("提示", "只支持选择当日至次月最后1日");
+                return false;
+            }
         }
     }
     //  设置积分失效日期
@@ -173,6 +172,32 @@ function ruleCheck(col, colName, newValue, oldValue) {
     return true;
 }
 
+/**
+ * 得到并发系数
+ * @param col
+ */
+//var ATTR_CONCURRENCY_FACTOR="152039510012" //并发系数
+// var ATTR_MAX_CONCURRENCY="152039510011";  //最大并发规格
+function getConcurrencyFactor(col){
+    // 根据列ID得到产品号
+    var prodId = col.substring(0, 12);
+    var maxCurrencyCol = prodId + "_" + ATTR_MAX_CONCURRENCY;
+    var currencyFactorCol = prodId + "_" + ATTR_CONCURRENCY_FACTOR;
+    var maxCurrencyVal = getColVal(maxCurrencyCol);
+
+    if (maxCurrencyVal != null && maxCurrencyVal !== "") {
+        var maxCurrency = parseInt(maxCurrencyVal, 10);
+        if (!isNaN(maxCurrency)) {
+            var currencyFactor=1+(maxCurrency-1)*0.5;
+            setColVal("groupProduct_attr_"+currencyFactorCol, currencyFactor);
+        }
+    }
+}
+
+/**
+ * 得到时间系数
+ * @param col
+ */
 // var ATTR_MAX_BLOCK_TIME="152039510013"; //  最长封堵时间
 // var ATTR_DURATION_FACTOR="152039510014";  //时长系数
 function getDurationFactor(col){
@@ -200,34 +225,12 @@ function getDurationFactor(col){
 }
 
 /**
- * 得到并发系数
- * @param col
- */
-//var ATTR_CONCURRENCY_FACTOR="152039510012" //并发系数
-// var ATTR_MAX_CONCURRENCY="152039510011";  //最大并发规格
-function getConcurrencyFactor(col){
-    // 根据列ID得到产品号
-    var prodId = col.substring(0, 12);
-    var maxCurrencyCol = prodId + "_" + ATTR_MAX_CONCURRENCY;
-    var currencyFactorCol = prodId + "_" + ATTR_CONCURRENCY_FACTOR;
-    var maxCurrencyVal = getColVal(maxCurrencyCol);
-
-    if (maxCurrencyVal != null && maxCurrencyVal !== "") {
-        var maxCurrency = parseInt(maxCurrencyVal, 10);
-        if (!isNaN(maxCurrency)) {
-            var currencyFactor=1+(maxCurrency-1)*0.5;
-            setColVal("groupProduct_attr_"+currencyFactorCol, currencyFactor);
-        }
-    }
-}
-
-/**
  * 计算积分总金额目录价
  * @param col
  */
 // var ATTR_CATALOG_PRICE="152039510015";  //积分总金额目录价
 // var ATTR_PURCHASE_POINTS="152039510017"; //购买积分数
-function calculateTotalPointsAmount(col) {
+function calculateCatalogPrice(col) {
     // 根据列ID得到产品号
     var prodId = col.substring(0, 12);
     var purchasePointsCol = prodId + "_" + ATTR_PURCHASE_POINTS;
@@ -308,10 +311,10 @@ function getPointsExpirationDate(col){
     var billingEffectiveDateCol = prodId + "_" + ATTR_BILLING_EFFECTIVE_DATE;
     var billingEffectiveDateVal = getColVal(billingEffectiveDateCol);
     if (billingEffectiveDateVal != null && billingEffectiveDateVal !== "") {
-        var billingEffectiveDate=new Date(dateStr);
+        var billingEffectiveDate=new Date(billingEffectiveDateVal);
         //  增加一年
-        billingEffectiveDate.setFullYear(date.getFullYear() + 1);
-        setColVal(pointsExpirationDateCol,billingEffectiveDateVal);
+        billingEffectiveDate.setFullYear(billingEffectiveDate.getFullYear() + 1);
+        setColVal("groupProduct_attr_"+pointsExpirationDateCol,billingEffectiveDateVal);
     }
 }
 
@@ -322,21 +325,6 @@ function getPointsExpirationDate(col){
  * @returns {boolean}
  */
 function ruleSubmit() {
-    var priceVal = getColVal(PROD_122088710001 + "_" + ATTR_PRICE);
-    var usageVal = getColVal(PROD_122088710001 + "_" + ATTR_USAGE);
-
-    // 校验单价必填
-    if (priceVal == null || priceVal === "") {
-        MessageBox.alert("提示", "请输入单价！");
-        return false;
-    }
-
-    // 校验使用量必填
-    if (usageVal == null || usageVal === "") {
-        MessageBox.alert("提示", "请输入使用量！");
-        return false;
-    }
-
     return true;
 }
 
@@ -344,12 +332,19 @@ function ruleSubmit() {
  * 获取规则对象
  */
 function getFuncObj() {
-    var ruleObj = businessParamsMap.get("rule_112088710001");
+    var ruleObj = businessParamsMap.get("rule_112039510001");
     if (!ruleObj) {
-        ruleObj = new rule_112088710001();
-        businessParamsMap.put("rule_112088710001", ruleObj);
+        ruleObj = new rule_112039510001();
+        businessParamsMap.put("rule_112039510001", ruleObj);
     }
     return ruleObj;
+}
+
+/**
+ * 枚举校验
+ */
+function checkEnum(value, enumObj){
+    return Object.values(enumObj).includes(value);
 }
 
 /**
@@ -390,3 +385,4 @@ function setColVal(col, val) {
 function getColVal(col) {
     return $(prefix + col).val();
 }
+
